@@ -1,0 +1,60 @@
+# docker-compose.yml for Coding101 Project
+# 處理 truststore 在 Docker 環境下的 SSL 憑證問題
+
+services:
+  # PostgreSQL + PostGIS 資料庫服務
+  db:
+    image: postgis/postgis:15-3.4
+    container_name: coding101-db
+    environment:
+      POSTGRES_USER: coding101
+      POSTGRES_PASSWORD: coding101_password
+      POSTGRES_DB: coding101
+    ports:
+      - "5433:5432"  # 使用 5433 避免與本地 PostgreSQL 衝突
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coding101 -d coding101"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coding101-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env  # 從 .env 檔案載入環境變數（包含 API_KEY）
+    environment:
+      - DOCKER_ENV=true
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://coding101:coding101_password@db:5432/coding101
+      # 可選：如果系統憑證路徑不同，可以指定
+      # - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+      # - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    depends_on:
+      db:
+        condition: service_healthy
+    # 注意：資料已打包進 Image，不需要 volume mount
+    # 如果需要開發時動態更新資料，可以取消註解以下行：
+    #volumes:
+    #  - ./data:/app/data:ro  # 只讀掛載（僅開發時使用）
+    #   - ./geocode_cache.json:/app/geocode_cache.json  # geocode cache（僅開發時使用）
+    restart: unless-stopped
+    healthcheck:
+      # 健康檢查使用 /health 端點（不需要 API Key）
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+
