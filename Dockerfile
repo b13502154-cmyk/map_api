@@ -35,5 +35,6 @@ COPY data/build/places.json ./data/build/places.json
 ENV PYTHONPATH=/app
 
 # 預設命令（可以根據需要修改）
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
 
