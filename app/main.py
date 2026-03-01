@@ -51,7 +51,7 @@ def verify_key(x_api_key: str = Header(None, alias="X-API-Key")):
     return True
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     """
     健康檢查端點（不需要 API Key）
