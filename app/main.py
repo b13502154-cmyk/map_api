@@ -1,12 +1,12 @@
 """
 FastAPI 應用程式主程式
 """
-import json
 from typing import List
+import psycopg
 from fastapi import FastAPI, HTTPException, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.places_service import get_places, get_cities, get_districts
-from app.config import DATA_FILE, API_KEY
+from app.config import API_KEY, DATABASE_URL
 
 app = FastAPI(
     title="Places API",
@@ -59,6 +59,32 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/db")
+def db_health():
+    """
+    資料庫健康檢查端點（不需要 API Key）
+    """
+    try:
+        # 嘗試連線資料庫並執行簡單查詢
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+
+        return {
+            "status": "ok",
+            "database": "up",
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "db_unavailable",
+                "message": f"資料庫連線失敗: {str(e)}",
+            },
+        )
+
+
 @app.get("/api/places")
 def api_places(
     category: List[str] | None = Query(None, description="地點分類篩選（可多個，例如：?category=park&category=toilet）"),
@@ -98,17 +124,7 @@ def api_places(
     所有參數皆為可選，可單獨或組合使用。
     """
     try:
-        # 檢查資料檔案是否存在
-        if not DATA_FILE.exists():
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "missing_data",
-                    "message": f"資料檔案不存在: {DATA_FILE}"
-                }
-            )
-
-        # 取得並篩選資料
+        # 取得並篩選資料（從資料庫載入）
         result = get_places(
             category=category,
             city=city,
@@ -127,30 +143,6 @@ def api_places(
             detail={
                 "error": "bad_bbox",
                 "message": str(e)
-            }
-        )
-    except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error": "missing_data",
-                "message": str(e)
-            }
-        )
-    except json.JSONDecodeError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "bad_json",
-                "message": f"資料檔案 JSON 格式錯誤: {str(e)}"
-            }
-        )
-    except OSError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "io_error",
-                "message": f"讀取資料檔案失敗: {str(e)}"
             }
         )
     except Exception as e:
@@ -183,17 +175,7 @@ def api_cities(
     返回可用城市及各城市的資料數量。
     """
     try:
-        # 檢查資料檔案是否存在
-        if not DATA_FILE.exists():
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "missing_data",
-                    "message": f"資料檔案不存在: {DATA_FILE}"
-                }
-            )
-
-        # 取得城市列表
+        # 取得城市列表（從資料庫載入）
         result = get_cities(
             category=category,
             include_outdated=include_outdated,
@@ -201,30 +183,6 @@ def api_cities(
 
         return result
 
-    except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error": "missing_data",
-                "message": str(e)
-            }
-        )
-    except json.JSONDecodeError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "bad_json",
-                "message": f"資料檔案 JSON 格式錯誤: {str(e)}"
-            }
-        )
-    except OSError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "io_error",
-                "message": f"讀取資料檔案失敗: {str(e)}"
-            }
-        )
     except Exception as e:
         # 未預期的錯誤
         raise HTTPException(
@@ -257,17 +215,7 @@ def api_districts(
     返回該城市的可用區域及各區域的資料數量。
     """
     try:
-        # 檢查資料檔案是否存在
-        if not DATA_FILE.exists():
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error": "missing_data",
-                    "message": f"資料檔案不存在: {DATA_FILE}"
-                }
-            )
-
-        # 取得區域列表
+        # 取得區域列表（從資料庫載入）
         result = get_districts(
             city=city,
             category=category,
@@ -283,30 +231,6 @@ def api_districts(
             detail={
                 "error": "invalid_parameter",
                 "message": str(e)
-            }
-        )
-    except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error": "missing_data",
-                "message": str(e)
-            }
-        )
-    except json.JSONDecodeError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "bad_json",
-                "message": f"資料檔案 JSON 格式錯誤: {str(e)}"
-            }
-        )
-    except OSError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "io_error",
-                "message": f"讀取資料檔案失敗: {str(e)}"
             }
         )
     except Exception as e:
